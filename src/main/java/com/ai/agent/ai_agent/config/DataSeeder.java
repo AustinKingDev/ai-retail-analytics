@@ -35,7 +35,7 @@ public class DataSeeder {
 
             for (int i = 1; i <= TOTAL_ITEMS; i++) {
                 double msrp = faker.number().randomDouble(2, 30, 500);
-                double storePrice = msrp - faker.number().randomDouble(2, 1, 50);
+                double storePrice = Math.max(1.0, msrp - faker.number().randomDouble(2, 1, 50));
                 double ecomPrice = Math.max(1.0, storePrice - faker.number().randomDouble(2, 0, 15));
                 double discount = Math.round(((msrp - storePrice) / msrp) * 10000.0) / 100.0;
 
@@ -47,6 +47,9 @@ public class DataSeeder {
                 ZonedDateTime now = ZonedDateTime.now();
                 ZonedDateTime promoStart = now.minusDays(faker.number().numberBetween(0, 5));
                 ZonedDateTime promoEnd = promoStart.plusDays(faker.number().numberBetween(1, 10));
+
+                int unitsSold = faker.number().numberBetween(0, 5000);
+                int recentSales = faker.number().numberBetween(0, Math.min(unitsSold, 300));
 
                 batch.add(ItemEntity.builder()
                         .itemId("ITEM" + String.format("%05d", i))
@@ -71,7 +74,8 @@ public class DataSeeder {
                         .lastPurchasedAt(now.minusDays(faker.number().numberBetween(1, 10)))
                         .averageRating(Math.round((faker.number().randomDouble(1, 2, 5)) * 10.0) / 10.0)
                         .numberOfReviews(faker.number().numberBetween(0, 1000))
-                        .unitsSold(faker.number().numberBetween(0, 5000))
+                        .unitsSold(unitsSold)
+                        .recentSalesCount(recentSales)
                         .build());
 
                 if (batch.size() == BATCH_SIZE) {

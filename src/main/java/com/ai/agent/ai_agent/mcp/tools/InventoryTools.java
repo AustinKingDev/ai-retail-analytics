@@ -12,6 +12,7 @@ import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Component;
 
+import java.util.Comparator;
 import java.util.List;
 import java.util.StringJoiner;
 import java.util.function.Predicate;
@@ -47,14 +48,28 @@ public class InventoryTools {
         }
     }
 
-    @Tool(name = "getUnderperformingItems", description = "Get items with low sales and low reviews")
-    public List<ItemEntity> getUnderperformingItems(
-            @ToolParam(description = "Maximum units sold") int maxUnitsSold,
-            @ToolParam(description = "Maximum average rating") double maxAverageRating
+    @Tool(name = "getUnderperformingItems", description = "Returns the bottom N items ranked by low sales and low reviews. Always returns results, even if no explicit threshold is provided.")
+    public String getUnderperformingItems(
+            @ToolParam(description = "Number of items to return") Integer limit
     ) {
-        logger.info("Fetching underperforming items (maxUnitsSold: {}, maxAverageRating: {})", maxUnitsSold, maxAverageRating);
+        logger.info("Fetching bottom-performing items (limit: {})", limit);
         try {
-            return getFilteredItems(item -> item.getUnitsSold() <= maxUnitsSold && item.getAverageRating() <= maxAverageRating);
+            List<ItemEntity> items = itemRepository.findAll();
+
+            if (items.isEmpty()) {
+                return "No item data available.";
+            }
+
+            int itemLimit = (limit != null && limit > 0) ? limit : 5;
+
+            List<ItemEntity> worstItems = items.stream()
+                    .sorted(Comparator
+                            .comparingInt(ItemEntity::getUnitsSold)
+                            .thenComparingDouble(ItemEntity::getAverageRating))
+                    .limit(itemLimit)
+                    .collect(Collectors.toList());
+
+            return ItemSummaryHelper.summarizeUnderperformingItems(worstItems);
         } catch (Exception ex) {
             logger.error("Error fetching underperforming items", ex);
             throw new RuntimeException("Failed to fetch underperforming items", ex);
@@ -190,21 +205,21 @@ public class InventoryTools {
         }
     }
 
-    @Tool(name = "demandForecast", description = "Predict future sales for items using historical data")
+    @Tool(name = "demandForecast", description = "Predict future sales for items using recent data")
     public String demandForecast(
             @ToolParam(description = "Item ID or category") String itemOrCategory,
             @ToolParam(description = "Forecast period in days") int forecastDays
     ) {
         logger.info("Forecasting demand for: {}, over next {} days", itemOrCategory, forecastDays);
-        final int lookbackDays = 30; // Use last 30 days as lookback period
+        final int lookbackDays = 30; // Simulated window
+
         try {
             List<ItemEntity> items;
-            // Try to find by itemId first
             ItemEntity item = itemRepository.findById(itemOrCategory).orElse(null);
+
             if (item != null) {
                 items = List.of(item);
             } else {
-                // Otherwise, treat as category
                 items = itemRepository.findByCategoryIgnoreCase(itemOrCategory);
                 if (items.isEmpty()) {
                     return "No items found for item ID or category: " + itemOrCategory;
@@ -212,15 +227,25 @@ public class InventoryTools {
             }
 
             StringBuilder sb = new StringBuilder("Demand Forecast for '" + itemOrCategory + "' (" + forecastDays + " days):\n");
+
             for (ItemEntity i : items) {
-                double avgDailySales = (double) i.getUnitsSold() / lookbackDays;
+                int recentSales = i.getRecentSalesCount();
+                if (recentSales <= 0) {
+                    sb.append(String.format("%s: No recent sales. Forecast not available.\n", i.getItemName()));
+                    continue;
+                }
+
+                double avgDailySales = (double) recentSales / lookbackDays;
                 int forecast = (int) Math.round(avgDailySales * forecastDays);
+
                 sb.append(String.format(
-                        "%s: Avg sales/day: %.2f, Forecasted sales: %d units\n",
+                        "%s: Avg daily sales: %.2f → Forecast: %d units\n",
                         i.getItemName(), avgDailySales, forecast
                 ));
             }
+
             return sb.toString();
+
         } catch (Exception ex) {
             logger.error("Error forecasting demand", ex);
             throw new RuntimeException("Failed to forecast demand", ex);
