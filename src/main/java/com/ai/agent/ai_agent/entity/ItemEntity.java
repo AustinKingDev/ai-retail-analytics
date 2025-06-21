@@ -72,4 +72,7 @@ public class ItemEntity {
 
     @Column(nullable = false, columnDefinition = "INTEGER DEFAULT 0")
     private int unitsSold;
+
+    @Column(nullable = false, columnDefinition = "INTEGER DEFAULT 0")
+    private int recentSalesCount;
 }

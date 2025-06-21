@@ -74,4 +74,24 @@ public class ItemSummaryHelper {
 
         return result.toString();
     }
+
+    public static String summarizeUnderperformingItems(List<ItemEntity> items) {
+        if (items == null || items.isEmpty()) {
+            return "No underperforming items found.";
+        }
+
+        StringBuilder sb = new StringBuilder("📉 Underperforming Items:\n");
+        int index = 1;
+        for (ItemEntity item : items) {
+            sb.append(String.format(
+                    "%d. %s (Units Sold: %d, Avg Rating: %.2f, Price: $%.2f)\n",
+                    index++,
+                    item.getItemName(),
+                    item.getUnitsSold(),
+                    item.getAverageRating(),
+                    item.getStorePrice()
+            ));
+        }
+        return sb.toString();
+    }
 }
